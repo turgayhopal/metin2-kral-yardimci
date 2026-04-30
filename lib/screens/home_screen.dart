@@ -70,7 +70,6 @@ class HomeScreen extends StatelessWidget {
               Icons.undo,
               color: game.canUndo ? Colors.orange : Colors.grey.shade300,
             ),
-            tooltip: 'Geri Al',
           ),
           TextButton(
             onPressed: () => context.read<GameLogic>().resetGame(),
@@ -87,12 +86,108 @@ class HomeScreen extends StatelessWidget {
               children: [
                 _buildCounters(game),
                 const SizedBox(height: 12),
-                _buildGrid(context, game),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _buildGrid(context, game)),
+                    const SizedBox(width: 8),
+                    _buildNeighborPanel(context, game),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 _buildLegend(),
                 const SizedBox(height: 12),
                 _buildCardPicker(context, game),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNeighborPanel(BuildContext context, GameLogic game) {
+    final hasLast = game.lastRow != null && game.lastCol != null;
+
+    return Column(
+      children: [
+        const SizedBox(height: 4),
+        Text(
+          'Komşu\nSeçimi',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+        ),
+        const SizedBox(height: 8),
+        _neighborBtn(
+          label: 'VAR',
+          color: Colors.red.shade400,
+          bgColor: Colors.red.shade50,
+          enabled: hasLast,
+          onTap: hasLast
+              ? () => context.read<GameLogic>().markNeighborsDangerous(
+                  game.lastRow!,
+                  game.lastCol!,
+                )
+              : null,
+        ),
+        const SizedBox(height: 6),
+        _neighborBtn(
+          label: 'YOK',
+          color: Colors.green.shade600,
+          bgColor: Colors.green.shade50,
+          enabled: hasLast,
+          onTap: hasLast
+              ? () => context.read<GameLogic>().markNeighborsSafe(
+                  game.lastRow!,
+                  game.lastCol!,
+                )
+              : null,
+        ),
+        const SizedBox(height: 6),
+        _neighborBtn(
+          label: 'SİL',
+          color: Colors.grey.shade600,
+          bgColor: Colors.grey.shade100,
+          enabled: hasLast,
+          onTap: hasLast
+              ? () => context.read<GameLogic>().clearNeighbors(
+                  game.lastRow!,
+                  game.lastCol!,
+                )
+              : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _neighborBtn({
+    required String label,
+    required Color color,
+    required Color bgColor,
+    required bool enabled,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 52,
+        height: 46,
+        decoration: BoxDecoration(
+          color: enabled ? bgColor : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: enabled ? color : Colors.grey.shade300,
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: enabled ? color : Colors.grey.shade400,
             ),
           ),
         ),
@@ -192,10 +287,12 @@ class HomeScreen extends StatelessWidget {
     Color textColor;
     String label = cell.value.label;
 
+    final isLast = game.lastRow == cell.row && game.lastCol == cell.col;
+
     switch (cell.state) {
       case CellState.opened:
         bg = _cardLightColor(cell.value);
-        borderColor = _cardColor(cell.value);
+        borderColor = isLast ? Colors.orange.shade400 : _cardColor(cell.value);
         textColor = _cardColor(cell.value);
         break;
       case CellState.dangerous:
@@ -219,18 +316,14 @@ class HomeScreen extends StatelessWidget {
     }
 
     return GestureDetector(
-      onTap: () async {
+      onTap: () {
         if (cell.state == CellState.opened) return;
-
         final game = context.read<GameLogic>();
-        final selectedCard = game.selectedCard;
-
-        // Kart bitti mi kontrol et
-        if (!game.canPlaceCard(selectedCard)) {
+        if (!game.canPlaceCard(game.selectedCard)) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '${selectedCard.label} kartı tükendi!',
+                '${game.selectedCard.label} kartı tükendi!',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               backgroundColor: Colors.red.shade400,
@@ -240,51 +333,14 @@ class HomeScreen extends StatelessWidget {
           );
           return;
         }
-
         game.onCellTap(cell.row, cell.col);
-
-        if (selectedCard != CardValue.empty) {
-          final hasFiveNeighbor = await showDialog<bool>(
-            context: context,
-            barrierDismissible: false,
-            builder: (_) => AlertDialog(
-              title: const Text('Komşu Kontrolü'),
-              content: const Text(
-                'Bu hücrenin çevresinde 5 var mı?',
-                style: TextStyle(fontSize: 15),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text(
-                    'Hayır',
-                    style: TextStyle(color: Colors.green),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text(
-                    'Evet',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ],
-            ),
-          );
-
-          if (hasFiveNeighbor == true) {
-            game.markNeighborsDangerous(cell.row, cell.col);
-          } else {
-            game.markNeighborsSafe(cell.row, cell.col);
-          }
-        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: borderColor, width: 1),
+          border: Border.all(color: borderColor, width: isLast ? 2 : 1),
         ),
         child: Center(
           child: Text(
